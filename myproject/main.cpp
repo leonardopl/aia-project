@@ -63,7 +63,7 @@ namespace
 
 int main()
 {
-	img = cv::imread(std::string(DATASET_PATH) + "/images/22579893_301f1776aebbf5d2_MG_R_ML_ANON.tif");
+	img = cv::imread(std::string(DATASET_PATH) + "/images/22678495_60995d51033e24b8_MG_R_ML_ANON.tif");
 
 	// 1) resize it to 20% of its original size
 	//cv::resize(img, img, cv::Size(0,0), 0.2, 0.2);
