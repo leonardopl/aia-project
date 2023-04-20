@@ -31,6 +31,7 @@ namespace
 		clahe->apply(transformed_img_channels[2], transformed_img_channels[2]);
 		// channels merge
 		cv::merge(transformed_img_channels, out);
+		//cv::startWindowThread();
 		cv::namedWindow("Result (BGR)", cv::WINDOW_NORMAL);
 		cv::imshow("Result (BGR)", out);
 		cv::resizeWindow("Result (BGR)", 700, 900);
@@ -63,19 +64,28 @@ namespace
 
 int main()
 {
+	cv::startWindowThread();
+
 	img = cv::imread(std::string(DATASET_PATH) + "/images/22678495_60995d51033e24b8_MG_R_ML_ANON.tif");
 
 	// 1) resize it to 20% of its original size
 	//cv::resize(img, img, cv::Size(0,0), 0.2, 0.2);
 	// 2) rescale from 14-bits to 16-bits
 	//cv::normalize(img, img, 0, 65535, cv::NORM_MINMAX);
-
+	
 	cv::namedWindow(win_name, cv::WINDOW_NORMAL);
+	
 	cv::resizeWindow(win_name, 700, 900);
 	cv::createTrackbar("clip_limit", win_name, &clip_limit, 100, CLAHECallback);
 	cv::createTrackbar("tile_size", win_name, &tile_size, 50, CLAHECallback);
 	CLAHECallback(0, 0);
-	cv::waitKey(0);
+
+	// wait for key press to exit
+	char exit_key_press = 0;
+	while (exit_key_press != 'q') // or key != ESC
+	{
+		exit_key_press = cv::waitKey(10);
+	}
 
 	return EXIT_SUCCESS;
 }
