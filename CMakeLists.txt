@@ -1,8 +1,8 @@
 # Top-Level CmakeLists.txt to build AIA projects
 cmake_minimum_required(VERSION 3.1)
 project( aia )
-#cmake_policy(SET CMP0054 OLD) 
-#cmake_policy(SET CMP0045 OLD)
+cmake_policy(SET CMP0054 OLD) 
+cmake_policy(SET CMP0045 OLD)
 
 # hide unused predefined variables
 set (CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX} CACHE INTERNAL "")
