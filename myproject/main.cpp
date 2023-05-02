@@ -23,7 +23,7 @@ int main()
 
 	cv::startWindowThread();
 
-	img = cv::imread(std::string(DATASET_PATH) + "/images/20587080_b6a4f750c6df4f90_MG_R_ML_ANON.tif", cv::IMREAD_GRAYSCALE);
+	img = cv::imread(std::string(DATASET_PATH) + "/images/20587226_fd746d25eb40b3dc_MG_L_ML_ANON.tif", cv::IMREAD_GRAYSCALE);
 	
 	// resize it to 20% of its original size
 	cv::resize(img, img, cv::Size(0,0), 0.2, 0.2);
@@ -88,31 +88,33 @@ void appplyCLAHE(cv::Mat &orig, int clip_limit, int tile_size)
 	clahe->apply(orig, orig);
 }
 
-// implement segmentation using mean shift filtering and CLAHE
+// implementation of local (8-neighborhood) region-growing segmentation based on color difference
 void segmentation(cv::Mat &orig)
 {
+	aia::imshow("Orig", orig, false);
+
 	cv::Mat img_ms;
 	cv::Mat bgr_image;
-	cv::cvtColor(orig, bgr_image, cv::COLOR_GRAY2BGR);
-	cv::pyrMeanShiftFiltering(bgr_image, img_ms, 10, 10, 0);
-	aia::imshow("Mean-Shift", img_ms);
-
+	cv::medianBlur(orig, img_ms, 7);
+	cv::cvtColor(img_ms, bgr_image, cv::COLOR_GRAY2BGR);
+	cv::pyrMeanShiftFiltering(bgr_image, img_ms, 17, 17, 0);
+/* 
 	// region growing based on color difference
 	aia::colorDiffSegmentation(img_ms);
-	aia::imshow("Postprocessing", img_ms);
+	aia::imshow("Postprocessing", img_ms); */
 
 	// convert back to grayscale
 	cv::cvtColor(img_ms, img_ms, cv::COLOR_BGR2GRAY);
-	aia::imshow("Grayscale", img_ms);
+	aia::imshow("Mean shift", img_ms, false);
 
-	// thresholding
+/* 	// thresholding
 	cv::threshold(img_ms, img_ms, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-	aia::imshow("Thresholding", img_ms);
+	aia::imshow("Thresholding", img_ms); */
 
 	// select top-right connected component
 	unsigned char muscle_intensity = img_ms.at<unsigned char>(10, img_ms.cols-10);
 	std::cout << "Muscle intensity: " << (int)muscle_intensity << std::endl;
-	cv::inRange(img_ms, muscle_intensity-5, muscle_intensity+5, img_ms);
+	cv::inRange(img_ms, muscle_intensity-12, muscle_intensity+5, img_ms);
 	std::vector < std::vector <cv::Point> > components;
 	cv::findContours(img_ms, components, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
 	int muscle_component_idx = 0;
@@ -133,12 +135,13 @@ void segmentation(cv::Mat &orig)
 	// overlay with original image
 	cv::Mat selection_layer = orig.clone();
 	cv::drawContours(selection_layer, components, muscle_component_idx, cv::Scalar(0, 255, 255), cv::FILLED, cv::LINE_AA);
-	cv::addWeighted(orig, 0.8, selection_layer, 0.2, 0, orig);
-	aia::imshow("Result", orig);
+	aia::imshow("Selection layer", selection_layer, false);
+/* 	cv::addWeighted(orig, 0.8, selection_layer, 0.2, 0, orig);
+	aia::imshow("Result", orig); */
 }
 
 // local (8-neighborhood) region-growing segmentation based on color difference
-void aia::colorDiffSegmentation(const cv::Mat & img, cv::Scalar colorDiff)
+void aia::colorDiffSegmentation(const cv::Mat &img, cv::Scalar colorDiff)
 {
 	// a number generator we will use to assign random colors to
 	cv::RNG rng = cv::theRNG();
