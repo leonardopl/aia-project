@@ -56,6 +56,11 @@ if (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-varargs")
 endif()
 
+if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-varargs")
+endif()
+
+set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
 
 # define folder where example images are stored
 add_definitions(-DEXAMPLE_IMAGES_PATH="${aia_SOURCE_DIR}/example_images")
