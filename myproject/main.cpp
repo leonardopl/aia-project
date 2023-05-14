@@ -183,12 +183,80 @@ namespace aia
 		cv::Mat segmented;
     img.copyTo(segmented, mask); */
 
+
+
+/*     // Use the pectoral line as a mask to segment the mammogram
+    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+    double rho = pectoral_line[0], theta = pectoral_line[1];
+    double x1 = rho / cos(theta), y1 = 0;
+    double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
+    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10); */
+
+// initialize a vector of cv::Vec2f
+std::vector<cv::Vec2f> strong_lines;
+
+		// loop through the lines
+for (int n1 = 0; n1 < lines.size(); n1++)
+{
+    // get the rho and theta values of the line
+    double rho = lines[n1][0];
+    double theta = lines[n1][1];
+
+    // if this is the first line, add it to the strong lines vector
+    if (n1 == 0)
+    {
+        strong_lines.push_back(lines[n1]);
+    }
+    else
+    {
+        // if rho is negative, flip its sign and subtract pi from theta
+        if (rho < 0)
+        {
+            rho *= -1;
+            theta -= CV_PI;
+        }
+
+        // initialize a flag for closeness
+        bool close = false;
+
+        // loop through the strong lines and check if the current line is close to any of them
+        for (int i = 0; i < strong_lines.size(); i++)
+        {
+            // get the rho and theta values of the strong line
+            double srho = strong_lines[i][0];
+            double stheta = strong_lines[i][1];
+
+            // check if the absolute difference between rho values is less than 10
+            bool closeness_rho = std::abs(rho - srho) < 10;
+
+            // check if the absolute difference between theta values is less than pi/36
+            bool closeness_theta = std::abs(theta - stheta) < CV_PI/36;
+
+            // check if both conditions are true
+            if (closeness_rho && closeness_theta)
+            {
+                // set the flag to true and break the loop
+                close = true;
+                break;
+            }
+        }
+
+        // if the current line is not close to any of the strong lines and there is still space in the vector, add it to the strong lines vector
+        if (!close && strong_lines.size() < 4)
+        {
+            strong_lines.push_back(lines[n1]);
+        }
+    }
+}
+
+std::cout << "Number of strong lines: " << strong_lines.size() << std::endl;
+
     // Select the pectoral line that is closest to the top right corner
     cv::Vec2f pectoral_line;
     double min_distance = DBL_MAX;
-    for (size_t i = 0; i < std::min(size_t(n), lines.size()); i++)
+    for (size_t i = 0; i < strong_lines.size(); i++)
     {
-        cv::Vec2f line = filtered_lines[i];
+        cv::Vec2f line = strong_lines[i];
         double rho = line[0], theta = line[1];
         double x1 = rho / cos(theta), y1 = 0;
         double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
@@ -200,12 +268,51 @@ namespace aia
         }
     }
 
-/*     // Use the pectoral line as a mask to segment the mammogram
-    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
-    double rho = pectoral_line[0], theta = pectoral_line[1];
-    double x1 = rho / cos(theta), y1 = 0;
-    double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
-    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10); */
+strong_lines = lines;
+
+		// get the width and height of the image
+int width = img.cols;
+int height = img.rows;
+
+// initialize a variable to store the minimum distance
+double min_dist = std::numeric_limits<double>::max();
+
+// initialize a variable to store the index of the closest line
+int closest_line = -1;
+
+// loop through the strong lines
+for (int i = 0; i < strong_lines.size(); i++)
+{
+    // get the rho and theta values of the line
+    double rho = strong_lines[i][0];
+    double theta = strong_lines[i][1];
+
+    // calculate the distance from the top right corner to the line
+    // using the formula |rho - x*cos(theta) - y*sin(theta)|
+    double dist = std::abs(rho - width * std::cos(theta) - 0 * std::sin(theta));
+
+    // check if the distance is smaller than the current minimum
+    if (dist < min_dist)
+    {
+        // update the minimum distance and the index of the closest line
+        min_dist = dist;
+        closest_line = i;
+    }
+}
+
+// check if a closest line was found
+if (closest_line != -1)
+{
+    // print the rho and theta values of the closest line
+    std::cout << "The closest line to the top right corner has rho = " << strong_lines[closest_line][0] << " and theta = " << strong_lines[closest_line][1] << std::endl;
+}
+else
+{
+    // print a message that no line was found
+    std::cout << "No line was found." << std::endl;
+}
+
+pectoral_line = strong_lines[closest_line];
 
     // Create the mask to segment the mammogram
     cv::Mat mask = cv::Mat::ones(img.size(), CV_8UC1) * 255;
