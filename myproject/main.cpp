@@ -321,26 +321,35 @@ cv::imshow("Line detection (Hough)2", img_copy2);
         }
     } */
 
-/*     // Use the pectoral line as a mask to segment the mammogram
-    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
-    float rho = pectoral_line[0];
-    float theta = pectoral_line[1];
-    double a = cos(theta), b = sin(theta);
-    double x0 = a*rho, y0 = b*rho;
-    double x1 = cvRound(x0 + 1000 * (-b)), y1 = cvRound(y0 + 1000 * (a));
-    double x2 = cvRound(x0 - 1000 * (-b)), y2 = cvRound(y0 - 1000 * (a));
-    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10);
-		cv::Mat segmented;
-    img.copyTo(segmented, mask); */
+	cv::Vec2f pectoral_line = lines[closest_line];
+
+    // Use the pectoral line as a mask to segment the mammogram
+    // cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+    // float rho2 = pectoral_line[0];
+    // float theta2 = pectoral_line[1];
+    // double a = cos(theta2), b = sin(theta2);
+    // double x0 = a*rho2, y0 = b*rho2;
+    // double x1 = cvRound(x0 + 1000 * (-b)), y1 = cvRound(y0 + 1000 * (a));
+    // double x2 = cvRound(x0 - 1000 * (-b)), y2 = cvRound(y0 - 1000 * (a));
+    // cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10);
+	// cv::Mat segmented;
+    //img.copyTo(segmented, mask);
 
 
+     //Use the pectoral line as a mask to segment the mammogram
+    cv::Mat mask = cv::Mat::ones(img.size(), CV_8UC1) * 255;
+    double rho2 = pectoral_line[0], theta2 = pectoral_line[1];
+    double x1 = rho2 / cos(theta2), y1 = 0;
+    double x2 = img.cols, y2 = (rho2 - x2 * cos(theta2)) / sin(theta2);
+    //cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10);
+	     // Create a mask polygon using points
+	std::vector<cv::Point> mask_pts;
+	mask_pts.push_back(cv::Point(x1, y1));
+	mask_pts.push_back(cv::Point(x2, y2));
+	mask_pts.push_back(cv::Point(img.cols, 0));
+    cv::fillConvexPoly(mask, mask_pts, cv::Scalar(0));
 
-/*     // Use the pectoral line as a mask to segment the mammogram
-    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
-    double rho = pectoral_line[0], theta = pectoral_line[1];
-    double x1 = rho / cos(theta), y1 = 0;
-    double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
-    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10); */
+
 
 // // initialize a vector of cv::Vec2f
 // std::vector<cv::Vec2f> strong_lines;
@@ -462,27 +471,27 @@ cv::imshow("Line detection (Hough)2", img_copy2);
 //     std::cout << "No line was found." << std::endl;
 // }
 
-cv::Vec2f pectoral_line = lines[closest_line];
+//cv::Vec2f pectoral_line = lines[closest_line];
 
-std::cout << "Pectoral line: " << pectoral_line << std::endl;
+// std::cout << "Pectoral line: " << pectoral_line << std::endl;
 
-    // Create the mask to segment the mammogram
-    cv::Mat mask = cv::Mat::ones(img.size(), CV_8UC1) * 255;
-    double rho2 = pectoral_line[0], theta2 = pectoral_line[1];
-    double x1 = rho2 / cos(theta2), y1 = 0;
-    double x2 = (rho2 - img.cols * sin(theta2)) / cos(theta2), y2 = img.cols;
+//     // Create the mask to segment the mammogram
+//     cv::Mat mask = cv::Mat::ones(img.size(), CV_8UC1) * 255;
+//     double rho2 = pectoral_line[0], theta2 = pectoral_line[1];
+//     double x1 = rho2 / cos(theta2), y1 = 0;
+//     double x2 = (rho2 - img.cols * sin(theta2)) / cos(theta2), y2 = img.cols;
 
-    // Create a mask polygon using points
-    std::vector<cv::Point> mask_pts;
-    //mask_pts.push_back(cv::Point(0, 0));
-    mask_pts.push_back(cv::Point(img.cols, 0));
-    mask_pts.push_back(cv::Point(x2, y2));
-    mask_pts.push_back(cv::Point(x1, y1));
-    cv::fillConvexPoly(mask, mask_pts, cv::Scalar(0));
+//     // Create a mask polygon using points
+//     std::vector<cv::Point> mask_pts;
+//     //mask_pts.push_back(cv::Point(0, 0));
+//     mask_pts.push_back(cv::Point(img.cols, 0));
+//     mask_pts.push_back(cv::Point(x2, y2));
+//     mask_pts.push_back(cv::Point(x1, y1));
+//     cv::fillConvexPoly(mask, mask_pts, cv::Scalar(0));
 
-    // Use the mask to segment the mammogram
-    cv::Mat segmented;
-    orig.copyTo(segmented, mask);
+//     // Use the mask to segment the mammogram
+     cv::Mat segmented;
+     orig.copyTo(segmented, mask);
 
     // Display the result
     cv::imshow("Segmented mammogram", segmented);
