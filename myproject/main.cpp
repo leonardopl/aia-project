@@ -102,37 +102,6 @@ namespace aia
 		std::vector<cv::Vec2f> lines;
 		cv::HoughLines(imgEdges, lines, drho, dtheta / 180.0, accum, 0, 0, aia::PI / 2.0, aia::PI);
 
-		// we draw the first 'n' lines
-		cv::Mat img_copy = img.clone();
-		for (int k = 0; k < std::min(size_t(n), lines.size()); k++)
-		{
-			float rho = lines[k][0];
-			float theta = lines[k][1];
-
-			if (theta < aia::PI / 4. || theta > 3. * aia::PI / 4.)
-			{ // ~vertical line
-
-				// point of intersection of the line with first row
-				cv::Point pt1(rho / cos(theta), 0);
-				// point of intersection of the line with last row
-				cv::Point pt2((rho - img_copy.rows * sin(theta)) / cos(theta), img_copy.rows);
-				// draw a white line
-				cv::line(img_copy, pt1, pt2, cv::Scalar(0, 0, 255), 1);
-			}
-			else
-			{ // ~horizontal line
-
-				// point of intersection of the line with first column
-				cv::Point pt1(0, rho / sin(theta));
-				// point of intersection of the line with last column
-				cv::Point pt2(img_copy.cols, (rho - img_copy.cols * cos(theta)) / sin(theta));
-				// draw a white line
-				cv::line(img_copy, pt1, pt2, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
-			}
-		}
-
-		cv::imshow("Line detection (Hough)", img_copy);
-
     // Iterate through the lines and filter out irrelevant ones
     std::vector<cv::Vec2f> filtered_lines;
     for (size_t i = 0; i < lines.size(); i++)
@@ -141,8 +110,8 @@ namespace aia
         float rho = line[0];
         float theta = line[1];
         double angle = theta * 180 / CV_PI;
-/*         if (angle < -45 || angle > 45) // filter out horizontal lines
-            continue; */
+         if (angle < 110 || angle > 170) // filter out horizontal lines
+            continue;
 
 /*         if (rho < img.rows / 2) // filter out lines above the center
             continue; */
@@ -151,51 +120,12 @@ namespace aia
     }
 		std::cout << "Number of lines: " << filtered_lines.size() << std::endl;
 
-/*     // Select the line that corresponds to the pectoral muscle
-    cv::Vec2f pectoral_line;
-    double max_length = 0;
-    for (size_t i = 0; i < filtered_lines.size(); i++)
-    {
-        cv::Vec2f line = filtered_lines[i];
-        float rho = line[0];
-        float theta = line[1];
-        double a = cos(theta), b = sin(theta);
-        double x0 = a*rho, y0 = b*rho;
-        double x1 = cvRound(x0 + 1000 * (-b)), y1 = cvRound(y0 + 1000 * (a));
-        double x2 = cvRound(x0 - 1000 * (-b)), y2 = cvRound(y0 - 1000 * (a));
-        double length = cv::norm(cv::Point(x1, y1) - cv::Point(x2, y2));
-        if (length > max_length)
-        {
-            max_length = length;
-            pectoral_line = line;
-        }
-    } */
-
-/*     // Use the pectoral line as a mask to segment the mammogram
-    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
-    float rho = pectoral_line[0];
-    float theta = pectoral_line[1];
-    double a = cos(theta), b = sin(theta);
-    double x0 = a*rho, y0 = b*rho;
-    double x1 = cvRound(x0 + 1000 * (-b)), y1 = cvRound(y0 + 1000 * (a));
-    double x2 = cvRound(x0 - 1000 * (-b)), y2 = cvRound(y0 - 1000 * (a));
-    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10);
-		cv::Mat segmented;
-    img.copyTo(segmented, mask); */
-
-
-
-/*     // Use the pectoral line as a mask to segment the mammogram
-    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
-    double rho = pectoral_line[0], theta = pectoral_line[1];
-    double x1 = rho / cos(theta), y1 = 0;
-    double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
-    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10); */
+		lines = filtered_lines;
 
 // initialize a vector of cv::Vec2f
 std::vector<cv::Vec2f> strong_lines;
 
-		// loop through the lines
+// loop through the lines
 for (int n1 = 0; n1 < lines.size(); n1++)
 {
     // get the rho and theta values of the line
@@ -249,26 +179,8 @@ for (int n1 = 0; n1 < lines.size(); n1++)
     }
 }
 
-std::cout << "Number of strong lines: " << strong_lines.size() << std::endl;
+lines = strong_lines;
 
-    // Select the pectoral line that is closest to the top right corner
-    cv::Vec2f pectoral_line;
-    double min_distance = DBL_MAX;
-    for (size_t i = 0; i < strong_lines.size(); i++)
-    {
-        cv::Vec2f line = strong_lines[i];
-        double rho = line[0], theta = line[1];
-        double x1 = rho / cos(theta), y1 = 0;
-        double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
-        double distance = sqrt((x2 - img.cols) * (x2 - img.cols) + y2 * y2);
-        if (distance < min_distance)
-        {
-            min_distance = distance;
-            pectoral_line = line;
-        }
-    }
-
-strong_lines = lines;
 
 		// get the width and height of the image
 int width = img.cols;
@@ -312,17 +224,257 @@ else
     std::cout << "No line was found." << std::endl;
 }
 
-pectoral_line = strong_lines[closest_line];
+// we draw the first 'n' lines
+cv::Mat img_copy2 = img.clone();
+	float rho = lines[closest_line][0];
+	float theta = lines[closest_line][1];
 
-    // Create the mask to segment the mammogram
-    cv::Mat mask = cv::Mat::ones(img.size(), CV_8UC1) * 255;
+	if (theta < aia::PI / 4. || theta > 3. * aia::PI / 4.)
+	{ // ~vertical line
+
+		// point of intersection of the line with first row
+		cv::Point pt1(rho / cos(theta), 0);
+		// point of intersection of the line with last row
+		cv::Point pt2((rho - img_copy2.rows * sin(theta)) / cos(theta), img_copy2.rows);
+		// draw a white line
+		cv::line(img_copy2, pt1, pt2, cv::Scalar(0, 0, 255), 1);
+	}
+	else
+	{ // ~horizontal line
+
+		// point of intersection of the line with first column
+		cv::Point pt1(0, rho / sin(theta));
+		// point of intersection of the line with last column
+		cv::Point pt2(img_copy2.cols, (rho - img_copy2.cols * cos(theta)) / sin(theta));
+		// draw a white line
+		cv::line(img_copy2, pt1, pt2, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+	}
+
+cv::imshow("Line detection (Hough)2", img_copy2);
+
+		// we draw the first 'n' lines
+		cv::Mat img_copy = img.clone();
+		for (int k = 0; k < std::min(size_t(n), lines.size()); k++)
+		{
+			float rho = lines[k][0];
+			float theta = lines[k][1];
+
+			if (theta < aia::PI / 4. || theta > 3. * aia::PI / 4.)
+			{ // ~vertical line
+
+				// point of intersection of the line with first row
+				cv::Point pt1(rho / cos(theta), 0);
+				// point of intersection of the line with last row
+				cv::Point pt2((rho - img_copy.rows * sin(theta)) / cos(theta), img_copy.rows);
+				// draw a white line
+				cv::line(img_copy, pt1, pt2, cv::Scalar(0, 0, 255), 1);
+			}
+			else
+			{ // ~horizontal line
+
+				// point of intersection of the line with first column
+				cv::Point pt1(0, rho / sin(theta));
+				// point of intersection of the line with last column
+				cv::Point pt2(img_copy.cols, (rho - img_copy.cols * cos(theta)) / sin(theta));
+				// draw a white line
+				cv::line(img_copy, pt1, pt2, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+			}
+		}
+
+		cv::imshow("Line detection (Hough)", img_copy);
+
+//     // Iterate through the lines and filter out irrelevant ones
+//     std::vector<cv::Vec2f> filtered_lines;
+//     for (size_t i = 0; i < lines.size(); i++)
+//     {
+//         cv::Vec2f line = lines[i];
+//         float rho = line[0];
+//         float theta = line[1];
+//         double angle = theta * 180 / CV_PI;
+//          if (angle < 110 || angle > 170) // filter out horizontal lines
+//             continue;
+
+// /*         if (rho < img.rows / 2) // filter out lines above the center
+//             continue; */
+
+//         filtered_lines.push_back(line);
+//     }
+// 		std::cout << "Number of lines: " << filtered_lines.size() << std::endl;
+
+/*     // Select the line that corresponds to the pectoral muscle
+    cv::Vec2f pectoral_line;
+    double max_length = 0;
+    for (size_t i = 0; i < filtered_lines.size(); i++)
+    {
+        cv::Vec2f line = filtered_lines[i];
+        float rho = line[0];
+        float theta = line[1];
+        double a = cos(theta), b = sin(theta);
+        double x0 = a*rho, y0 = b*rho;
+        double x1 = cvRound(x0 + 1000 * (-b)), y1 = cvRound(y0 + 1000 * (a));
+        double x2 = cvRound(x0 - 1000 * (-b)), y2 = cvRound(y0 - 1000 * (a));
+        double length = cv::norm(cv::Point(x1, y1) - cv::Point(x2, y2));
+        if (length > max_length)
+        {
+            max_length = length;
+            pectoral_line = line;
+        }
+    } */
+
+/*     // Use the pectoral line as a mask to segment the mammogram
+    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
+    float rho = pectoral_line[0];
+    float theta = pectoral_line[1];
+    double a = cos(theta), b = sin(theta);
+    double x0 = a*rho, y0 = b*rho;
+    double x1 = cvRound(x0 + 1000 * (-b)), y1 = cvRound(y0 + 1000 * (a));
+    double x2 = cvRound(x0 - 1000 * (-b)), y2 = cvRound(y0 - 1000 * (a));
+    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10);
+		cv::Mat segmented;
+    img.copyTo(segmented, mask); */
+
+
+
+/*     // Use the pectoral line as a mask to segment the mammogram
+    cv::Mat mask = cv::Mat::zeros(img.size(), CV_8UC1);
     double rho = pectoral_line[0], theta = pectoral_line[1];
     double x1 = rho / cos(theta), y1 = 0;
     double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
+    cv::line(mask, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255), 10); */
+
+// // initialize a vector of cv::Vec2f
+// std::vector<cv::Vec2f> strong_lines;
+
+// // loop through the lines
+// for (int n1 = 0; n1 < lines.size(); n1++)
+// {
+//     // get the rho and theta values of the line
+//     double rho = lines[n1][0];
+//     double theta = lines[n1][1];
+
+//     // if this is the first line, add it to the strong lines vector
+//     if (n1 == 0)
+//     {
+//         strong_lines.push_back(lines[n1]);
+//     }
+//     else
+//     {
+//         // if rho is negative, flip its sign and subtract pi from theta
+//         if (rho < 0)
+//         {
+//             rho *= -1;
+//             theta -= CV_PI;
+//         }
+
+//         // initialize a flag for closeness
+//         bool close = false;
+
+//         // loop through the strong lines and check if the current line is close to any of them
+//         for (int i = 0; i < strong_lines.size(); i++)
+//         {
+//             // get the rho and theta values of the strong line
+//             double srho = strong_lines[i][0];
+//             double stheta = strong_lines[i][1];
+
+//             // check if the absolute difference between rho values is less than 10
+//             bool closeness_rho = std::abs(rho - srho) < 10;
+
+//             // check if the absolute difference between theta values is less than pi/36
+//             bool closeness_theta = std::abs(theta - stheta) < CV_PI/36;
+
+//             // check if both conditions are true
+//             if (closeness_rho && closeness_theta)
+//             {
+//                 // set the flag to true and break the loop
+//                 close = true;
+//                 break;
+//             }
+//         }
+
+//         // if the current line is not close to any of the strong lines and there is still space in the vector, add it to the strong lines vector
+//         if (!close && strong_lines.size() < 4)
+//         {
+//             strong_lines.push_back(lines[n1]);
+//         }
+//     }
+// }
+
+// std::cout << "Number of strong lines: " << strong_lines.size() << std::endl;
+
+//     // Select the pectoral line that is closest to the top right corner
+//     cv::Vec2f pectoral_line;
+//     double min_distance = DBL_MAX;
+//     for (size_t i = 0; i < strong_lines.size(); i++)
+//     {
+//         cv::Vec2f line = strong_lines[i];
+//         double rho = line[0], theta = line[1];
+//         double x1 = rho / cos(theta), y1 = 0;
+//         double x2 = (rho - img.cols * sin(theta)) / cos(theta), y2 = img.cols;
+//         double distance = sqrt((x2 - img.cols) * (x2 - img.cols) + y2 * y2);
+//         if (distance < min_distance)
+//         {
+//             min_distance = distance;
+//             pectoral_line = line;
+//         }
+//     }
+
+// strong_lines = lines;
+
+// 		// get the width and height of the image
+// int width = img.cols;
+// int height = img.rows;
+
+// // initialize a variable to store the minimum distance
+// double min_dist = std::numeric_limits<double>::max();
+
+// // initialize a variable to store the index of the closest line
+// int closest_line = -1;
+
+// // loop through the strong lines
+// for (int i = 0; i < strong_lines.size(); i++)
+// {
+//     // get the rho and theta values of the line
+//     double rho = strong_lines[i][0];
+//     double theta = strong_lines[i][1];
+
+//     // calculate the distance from the top right corner to the line
+//     // using the formula |rho - x*cos(theta) - y*sin(theta)|
+//     double dist = std::abs(rho - width * std::cos(theta) - 0 * std::sin(theta));
+
+//     // check if the distance is smaller than the current minimum
+//     if (dist < min_dist)
+//     {
+//         // update the minimum distance and the index of the closest line
+//         min_dist = dist;
+//         closest_line = i;
+//     }
+// }
+
+// // check if a closest line was found
+// if (closest_line != -1)
+// {
+//     // print the rho and theta values of the closest line
+//     std::cout << "The closest line to the top right corner has rho = " << strong_lines[closest_line][0] << " and theta = " << strong_lines[closest_line][1] << std::endl;
+// }
+// else
+// {
+//     // print a message that no line was found
+//     std::cout << "No line was found." << std::endl;
+// }
+
+cv::Vec2f pectoral_line = lines[closest_line];
+
+std::cout << "Pectoral line: " << pectoral_line << std::endl;
+
+    // Create the mask to segment the mammogram
+    cv::Mat mask = cv::Mat::ones(img.size(), CV_8UC1) * 255;
+    double rho2 = pectoral_line[0], theta2 = pectoral_line[1];
+    double x1 = rho2 / cos(theta2), y1 = 0;
+    double x2 = (rho2 - img.cols * sin(theta2)) / cos(theta2), y2 = img.cols;
 
     // Create a mask polygon using points
     std::vector<cv::Point> mask_pts;
-    mask_pts.push_back(cv::Point(0, 0));
+    //mask_pts.push_back(cv::Point(0, 0));
     mask_pts.push_back(cv::Point(img.cols, 0));
     mask_pts.push_back(cv::Point(x2, y2));
     mask_pts.push_back(cv::Point(x1, y1));
@@ -347,10 +499,10 @@ int main()
 
 	cv::startWindowThread();
 
-	img = cv::imread(std::string(DATASET_PATH) + "/images/20587346_e634830794f5c1bd_MG_R_ML_ANON.tif", cv::IMREAD_GRAYSCALE);
+	img = cv::imread(std::string(DATASET_PATH) + "/images/22671003_f571fd4e63c718e3_MG_L_ML_ANON.tif", cv::IMREAD_GRAYSCALE);
 	
 	// resize it to 20% of its original size
-	cv::resize(img, img, cv::Size(0,0), 0.2, 0.2);
+	cv::resize(img, img, cv::Size(0,0), 0.15, 0.15);
 
 	// standardize orientation
 	standardize_orientation(img);
@@ -440,7 +592,7 @@ void segmentation(cv::Mat &orig)
 	cv::cvtColor(img_ms, img_ms, cv::COLOR_BGR2GRAY);
 	aia::imshow("Mean shift", img_ms, false);
 
-		aia::img = img_ms.clone();
+		aia::img = orig.clone();
 		aia::orig = orig.clone();
 			// set default parameters
 		aia::stdevX10 = 20;
