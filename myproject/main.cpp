@@ -2,20 +2,27 @@
 #include "aiaConfig.h"
 #include "ucasConfig.h"
 
+void apply_ms(int, void*);
 void segmentation(cv::Mat &);
 void intensity_based_segmentation(int, void*);
 void colorDiffSegmentation(const cv::Mat &, cv::Scalar);
-void standardize_orientation(cv::Mat &);
-void appplyCLAHE(cv::Mat &, int, int);
+bool standardize_orientation(cv::Mat &);
+void appplyCLAHE(int, void*);
 cv::Mat quantizeImage(cv::Mat, int);
 
 // since we work with a GUI, we need parameters (and the images) to be stored in global variables
 namespace aia
 {
 	// the images we need to keep in memory
-	cv::Mat img;            // input image
-	cv::Mat imgEdges;       // binary image after edge detection
-	cv::Mat orig;			// original image
+	cv::Mat img;         			// input image
+	cv::Mat imgEdges;      	  		// binary image after edge detection
+	cv::Mat orig;			 		// original image
+	cv::Mat img_ms;			 		// mean-shift image
+	cv::Mat img_ms_kmeans;	 		// mean-shift image for k-means (BGR)
+	cv::Mat segmented_hough;		// segmented image by hough method
+	cv::Mat segmented_intensity;	// segmented image by intensity method
+	cv::Mat segmented_final;		// final segmented image
+	cv::Mat clahe;					// CLAHE image
 
 	// parameters of edge detection
 	int stdevX10;           // standard deviation of the gaussian smoothing applied as denoising prior to the calculation of the image derivative
@@ -33,25 +40,42 @@ namespace aia
 	// parameters of intensity-based segmentation
 	int l_range = 10;
 	int u_range = 10;
-	cv::Mat img_ms;
+
+	// parameters of mean-shift segmentation
+	int termcrit = 20;
+
+	// parameters of k-means segmentation
+	int kmeans_clusters = 4;
+
+	// parameters of CLAHE
+	int clip_limit = 6;
+	int tile_size = 10;
 
 	// Window names
 	const std::string win_name_edge = "Edge detection (gradient)";
 	const std::string win_name_hough = "Hough transform lines";
 	const std::string win_name_int_seg = "Intensity-based segmentation";
+	const std::string win_name_kmeans = "K-means segmentation";
+	const std::string win_name_ms = "Mean shift";
+	const std::string win_name_clahe = "CLAHE";
 
 	void edgeDetectionGrad(int, void*);
 	void Hough(int, void*);
 
 	int use_ms = 1;
 	int show_kmeans = 1;
+	int use_intensity = 0;
 	bool change_ui = false;
 }
 
-void set_toggle(int state, void* d) {
+void set_toggle_ui(int state, void* d) {
     int* int_ptr = static_cast<int*>(d);
     *int_ptr = state;
 	aia::change_ui = true;
+}
+void set_toggle(int state, void* d) {
+    int* int_ptr = static_cast<int*>(d);
+    *int_ptr = state;
 }
 
 //////////////////////////////////////////
@@ -60,14 +84,14 @@ void set_toggle(int state, void* d) {
 int main()
 {
 	cv::Mat img;
-	int clip_limit = 6;
-	int tile_size = 10;
 
 	cv::startWindowThread();
 
+	std::string filename = "22670855_0b7396cdccacca82_MG_R_ML_ANON";
+
 	img = cv::imread(
 		std::string(DATASET_PATH) + 
-		"/images/22671003_f571fd4e63c718e3_MG_L_ML_ANON.tif", 
+		"/images/" + filename + ".tif", 
 		cv::IMREAD_GRAYSCALE);
 
 	// check if the image was loaded
@@ -82,15 +106,15 @@ int main()
 	cv::resize(img, img, cv::Size(0,0), 0.15, 0.15);
 
 	// standardize orientation
-	standardize_orientation(img);
+	bool rotated = standardize_orientation(img);
 
 	aia::imshow("Orig", img, false);
 	std::string nameb1 = "Use mean-shift";
     std::string nameb2 = "Show k-means (needs mean-shift)";
-    cv::createButton(nameb1, set_toggle, &aia::use_ms, cv::QT_CHECKBOX, 1);
-    cv::createButton(nameb2, set_toggle, &aia::show_kmeans, cv::QT_CHECKBOX, 1);
+    cv::createButton(nameb1, set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 1);
+    cv::createButton(nameb2, set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 1);
+	cv::createButton("Use intensity seg", set_toggle, &aia::use_intensity, cv::QT_CHECKBOX, 0);
 
-	std::cout << "test" << cv::getWindowProperty("Ordig", cv::WND_PROP_VISIBLE) << std::endl;
 
 	// set default parameters
 	aia::stdevX10 = 20;
@@ -101,6 +125,8 @@ int main()
 	aia::dtheta = 1;
 	aia::accum = 11;
 	aia::n = 30;
+
+	aia::orig = img.clone();
 
 	segmentation(img);
 
@@ -118,7 +144,48 @@ int main()
 
 	}
 
+	cv::destroyAllWindows();
+
+	if (aia::use_intensity) {
+		aia::segmented_final = aia::segmented_intensity;
+	}
+	else {
+		aia::segmented_final = aia::segmented_hough;
+	}
+
+	cv::namedWindow(aia::win_name_clahe);
+	cv::createTrackbar("clip_limit", aia::win_name_clahe, &aia::clip_limit, 40, appplyCLAHE);
+	cv::createTrackbar("tile_size", aia::win_name_clahe, &aia::tile_size, 40, appplyCLAHE);
+	appplyCLAHE(1, 0);
+
+	// wait for ESC key to be pressed to exit
+	exit_key_press = 0;
+	while (exit_key_press != 27) // or key != 'q'
+	{
+		exit_key_press = cv::waitKey(10);
+	}
+
+	// flip image to original orientation
+	if (rotated) {
+		cv::flip(aia::segmented_final, aia::segmented_final, 1);
+		rotated = false;
+	}
+
+	cv::imwrite(std::string(DATASET_PATH) + "/results/preprocessing/"
+	+ filename + "_segmented" + ".tif", aia::segmented_final);
+
 	return EXIT_SUCCESS;
+}
+
+void apply_ms(int, void*) {
+	cv::Mat img_ms;
+	cv::Mat bgr_image;
+	cv::medianBlur(aia::orig, img_ms, 7);
+	cv::cvtColor(img_ms, bgr_image, cv::COLOR_GRAY2BGR);
+	cv::pyrMeanShiftFiltering(bgr_image, img_ms, aia::termcrit, aia::termcrit, 0);
+	aia::img_ms_kmeans = img_ms.clone();
+	cv::cvtColor(img_ms, aia::img_ms, cv::COLOR_BGR2GRAY);
+	aia::imshow(aia::win_name_ms, aia::img_ms, false);
 }
 
 
@@ -127,19 +194,20 @@ int main()
 //////////////////////////////////////////
 void segmentation(cv::Mat &orig)
 {
-	cv::Mat img_ms;
-	cv::Mat bgr_image;
-
 	if (aia::use_ms) {
-		cv::medianBlur(orig, img_ms, 7);
-		cv::cvtColor(img_ms, bgr_image, cv::COLOR_GRAY2BGR);
-		cv::pyrMeanShiftFiltering(bgr_image, img_ms, 20, 20, 0);
-	}
+		cv::namedWindow(aia::win_name_ms);
+		cv::createTrackbar("termcrit", aia::win_name_ms, &aia::termcrit, 40, apply_ms);
+		apply_ms(1, 0);
 
+	}
+	else {
+		if (cv::getWindowProperty(aia::win_name_ms, cv::WND_PROP_VISIBLE) == 1)
+			cv::destroyWindow(aia::win_name_ms);
+	}
 
 	cv::Mat img_kmeans;
 	if (aia::use_ms && aia::show_kmeans) {
-		img_kmeans = quantizeImage(img_ms, 4);
+		img_kmeans = quantizeImage(aia::img_ms_kmeans, aia::kmeans_clusters);
 		aia::imshow("K-means test", img_kmeans, false);
 	}
 	else {
@@ -153,25 +221,15 @@ void segmentation(cv::Mat &orig)
 	aia::colorDiffSegmentation(img_ms_copy);
 	aia::imshow("Postprocessing", img_ms_copy); */
 
-	// convert back to grayscale
-	if (aia::use_ms) {
-		cv::cvtColor(img_ms, img_ms, cv::COLOR_BGR2GRAY);
-		aia::imshow("Mean shift", img_ms, false);
-	}
-	else {
-		if (cv::getWindowProperty("Mean shift", cv::WND_PROP_VISIBLE) == 1)
-			cv::destroyWindow("Mean shift");
-	}
 
 	//////////////////////////////////////////
 	// HOUGH-BASED SEGMENTATION
 	//////////////////////////////////////////
 	if (aia::use_ms) {
-		aia::img = img_ms.clone();
+		aia::img = aia::img_ms.clone();
 	} else {
 		aia::img = orig.clone();
 	}
-	aia::orig = orig.clone();
 
 	// create a window named 'Edge detection (gradient)' and insert the trackbars
 	cv::namedWindow(aia::win_name_edge);
@@ -211,7 +269,7 @@ void segmentation(cv::Mat &orig)
 	aia::imshow("Thresholding", img_ms); */
 
 	if (aia::use_ms) {
-		aia::img_ms = img_ms.clone();
+		aia::img_ms = aia::img_ms.clone();
 		cv::namedWindow(aia::win_name_int_seg);
 		cv::createTrackbar("lower range", aia::win_name_int_seg, &aia::l_range, 20, intensity_based_segmentation);
 		cv::createTrackbar("upper range", aia::win_name_int_seg, &aia::u_range, 20, intensity_based_segmentation);
@@ -265,13 +323,15 @@ void intensity_based_segmentation(int, void* data) {
 	cv::Mat selection_layer = aia::orig.clone();
 	cv::drawContours(selection_layer, components, muscle_component_idx, cv::Scalar(0, 255, 255), cv::FILLED, cv::LINE_AA);
 	aia::imshow(aia::win_name_int_seg, selection_layer, false);
+	aia::segmented_intensity = selection_layer.clone();
 }
 
 
 //////////////////////////////////////////
 // STANDARDIZE ORIENTATION
 //////////////////////////////////////////
-void standardize_orientation(cv::Mat &original) {
+bool standardize_orientation(cv::Mat &original) {
+	int rotated = false;
 	int right_cntr = 0;
 	int left_cntr = 0;
 
@@ -293,17 +353,23 @@ void standardize_orientation(cv::Mat &original) {
 	// flip the image if the breast is on the left side
 	if (right_cntr > left_cntr) {
 		cv::flip(original, original, 1);
+		rotated = true;
 	}
+
+	return rotated;
 }
 
 
 //////////////////////////////////////////
 // CLAHE
 //////////////////////////////////////////
-void appplyCLAHE(cv::Mat &orig, int clip_limit, int tile_size)
+void appplyCLAHE(int, void*)
 {
-	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(clip_limit, cv::Size(tile_size, tile_size));
-	clahe->apply(orig, orig);
+	if (aia::tile_size < 1)
+		return;
+	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(aia::clip_limit, cv::Size(aia::tile_size, aia::tile_size));
+	clahe->apply(aia::segmented_final, aia::clahe);
+	cv::imshow(aia::win_name_clahe, aia::clahe);
 }
 
 
@@ -666,6 +732,8 @@ void aia::Hough(int, void*)
 	cv::Mat segmented;
 	orig.copyTo(segmented, mask);
 
+	aia::segmented_hough = segmented;
+
 	// Display the result
-	cv::imshow("Segmented mammogram", segmented);
+	cv::imshow("Segmented mammogram", segmented_hough);
 }
