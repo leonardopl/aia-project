@@ -2,6 +2,8 @@
 #include "aiaConfig.h"
 #include "ucasConfig.h"
 #include <filesystem>
+#include <fstream>
+
 namespace fs = std::filesystem;
 
 void apply_ms(int, void*);
@@ -70,8 +72,8 @@ namespace aia
 	void edgeDetectionGrad(int, void*);
 	void Hough(int, void*);
 
-	int use_ms = 1;
-	int show_kmeans = 1;
+	int use_ms = 0;
+	int show_kmeans = 0;
 	int use_intensity = 0;
 	bool change_ui = false;
 }
@@ -103,6 +105,12 @@ int main()
 			continue;
 		}
 
+		// check if file exists
+		if (fs::exists(std::string(DATASET_PATH) + "/results/preprocessing/" + filename + "_preprocessed" + ".tif")) {
+			std::cout << "File " << filename << " already preprocessed" << std::endl;
+			continue;
+		}
+
 		cv::Mat img;
 
 		cv::startWindowThread();
@@ -121,19 +129,20 @@ int main()
 			return EXIT_FAILURE;
 		}
 
+		// standardize orientation
+		bool rotated = false;
+		rotated = standardize_orientation(img);
+
 		aia::img_fs = img.clone();
 
 		// resize it to 15% of its original size
 		cv::resize(img, aia::orig, cv::Size(0,0), aia::scale, aia::scale);
 
-		// standardize orientation
-		bool rotated = standardize_orientation(aia::orig);
-
 		aia::imshow("Orig", aia::orig, false);
 		std::string nameb1 = "Use mean-shift";
 		std::string nameb2 = "Show k-means (needs mean-shift)";
-		cv::createButton(nameb1, set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 1);
-		cv::createButton(nameb2, set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 1);
+		cv::createButton(nameb1, set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 0);
+		cv::createButton(nameb2, set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 0);
 		cv::createButton("Use intensity seg", set_toggle, &aia::use_intensity, cv::QT_CHECKBOX, 0);
 
 
@@ -143,7 +152,7 @@ int main()
 		aia::alpha0 = 0;
 		aia::alpha1 = 360;
 		aia::drho = 1;
-		aia::dtheta = 1;
+		aia::dtheta = 6;
 		aia::accum = 11;
 		aia::n = 30;
 
@@ -190,7 +199,29 @@ int main()
 		}
 
 		cv::imwrite(std::string(DATASET_PATH) + "/results/preprocessing/"
-		+ filename + "_segmented" + ".tif", aia::clahe);
+		+ filename + "_preprocessed" + ".tif", aia::clahe);
+
+		std::ofstream log;
+		log.open (std::string(DATASET_PATH) + "/results/preprocessing/logs/"
+		+ filename + "_log" + ".txt");
+		log <<
+		"filename: " << filename << std::endl <<
+		"stdevX10: " << aia::stdevX10 << std::endl <<
+		"threshold: " << aia::threshold << std::endl <<
+		"alpha0: " << aia::alpha0 << std::endl <<
+		"alpha1: " << aia::alpha1 << std::endl <<
+		"drho: " << aia::drho << std::endl <<
+		"dtheta: " << aia::dtheta << std::endl <<
+		"accum: " << aia::accum << std::endl <<
+		"n: " << aia::n << std::endl <<
+		"clip_limit: " << aia::clip_limit << std::endl <<
+		"tile_size: " << aia::tile_size << std::endl <<
+		"scale: " << aia::scale << std::endl <<
+		"rotated: " << rotated << std::endl <<
+		"use_ms: " << aia::use_ms << std::endl <<
+		"show_kmeans: " << aia::show_kmeans << std::endl <<
+		"use_intensity: " << aia::use_intensity << std::endl;
+		log.close();
 
 		cv::destroyAllWindows();
 	}
@@ -317,7 +348,6 @@ bool compareContourAreas ( std::vector<cv::Point> contour1, std::vector<cv::Poin
 }
 void intensity_based_segmentation(int, void* data) {
 	unsigned char muscle_intensity = aia::img_ms.at<unsigned char>(10, aia::img_ms.cols-10);
-	std::cout << "Muscle intensity: " << (int)muscle_intensity << std::endl;
 	cv::Mat mask = cv::Mat::zeros(aia::img_ms.size(), CV_8UC1);
 	cv::inRange(aia::img_ms, muscle_intensity-aia::l_range, muscle_intensity+aia::u_range, mask);
 	std::vector < std::vector <cv::Point> > components;
@@ -528,7 +558,7 @@ void aia::Hough(int, void*)
 		float rho = line[0];
 		float theta = line[1];
 		double angle = theta * 180 / CV_PI;
-		if (angle < 100 || angle > 170) // filter out horizontal lines
+		if (angle < 100 || angle > 170)
 			continue;
 
 		filtered_lines.push_back(line);
@@ -539,101 +569,22 @@ void aia::Hough(int, void*)
 
 
 	//////////////////////////////////////////
-	// SELECT STRONG LINES
-	//////////////////////////////////////////
-
-	// initialize a vector of cv::Vec2f
-	std::vector<cv::Vec2f> strong_lines;
-
-	// loop through the lines
-	for (int n1 = 0; n1 < lines.size(); n1++)
-	{
-		// get the rho and theta values of the line
-		double rho = lines[n1][0];
-		double theta = lines[n1][1];
-
-		// if this is the first line, add it to the strong lines vector
-		if (n1 == 0)
-		{
-			strong_lines.push_back(lines[n1]);
-		}
-		else
-		{
-			// if rho is negative, flip its sign and subtract pi from theta
-			if (rho < 0)
-			{
-				rho *= -1;
-				theta -= CV_PI;
-			}
-
-			// initialize a flag for closeness
-			bool close = false;
-
-			// loop through the strong lines and check if the current line is close to any of them
-			for (int i = 0; i < strong_lines.size(); i++)
-			{
-				// get the rho and theta values of the strong line
-				double srho = strong_lines[i][0];
-				double stheta = strong_lines[i][1];
-
-				// check if the absolute difference between rho values is less than 10
-				bool closeness_rho = std::abs(rho - srho) < 10;
-
-				// check if the absolute difference between theta values is less than pi/36
-				bool closeness_theta = std::abs(theta - stheta) < CV_PI/36;
-
-				// check if both conditions are true
-				if (closeness_rho && closeness_theta)
-				{
-					// set the flag to true and break the loop
-					close = true;
-					break;
-				}
-			}
-
-			// if the current line is not close to any of the strong lines and there is still space in the vector, add it to the strong lines vector
-			if (!close && strong_lines.size() < 4)
-			{
-				strong_lines.push_back(lines[n1]);
-			}
-		}
-	}
-
-	lines = strong_lines;
-	//////////////////////////////////////////
-
-
-	//////////////////////////////////////////
 	// DRAW FIRST N LINES
 	//////////////////////////////////////////
 
 	// we draw the first 'n' lines
 	cv::Mat img_copy = img.clone();
-	for (int k = 0; k < std::min(size_t(n), lines.size()); k++)
+	for (int i = 0; i < std::min(size_t(n), lines.size()); i++)
 	{
-		float rho = lines[k][0];
-		float theta = lines[k][1];
-
-		if (theta < aia::PI / 4. || theta > 3. * aia::PI / 4.)
-		{ // ~vertical line
-
-			// point of intersection of the line with first row
-			cv::Point pt1(rho / cos(theta), 0);
-			// point of intersection of the line with last row
-			cv::Point pt2((rho - img_copy.rows * sin(theta)) / cos(theta), img_copy.rows);
-			// draw a white line
-			cv::line(img_copy, pt1, pt2, cv::Scalar(0, 0, 255), 1);
-		}
-		else
-		{ // ~horizontal line
-
-			// point of intersection of the line with first column
-			cv::Point pt1(0, rho / sin(theta));
-			// point of intersection of the line with last column
-			cv::Point pt2(img_copy.cols, (rho - img_copy.cols * cos(theta)) / sin(theta));
-			// draw a white line
-			cv::line(img_copy, pt1, pt2, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
-		}
+        float rho = lines[i][0], theta = lines[i][1];
+        cv::Point pt1, pt2;
+        double a = cos(theta), b = sin(theta);
+        double x0 = a*rho, y0 = b*rho;
+        pt1.x = cvRound(x0 + 1000*(-b));
+        pt1.y = cvRound(y0 + 1000*(a));
+        pt2.x = cvRound(x0 - 1000*(-b));
+        pt2.y = cvRound(y0 - 1000*(a));
+        line( img_copy, pt1, pt2, cv::Scalar(255), 1, cv::LINE_AA);
 	}
 
 	cv::imshow(aia::win_name_hough, img_copy);
@@ -644,33 +595,44 @@ void aia::Hough(int, void*)
 	// DETERMINE CLOSEST LINE TO TOP
 	//////////////////////////////////////////
 
-	// get the width and height of the image
-	int width = img.cols;
-	int height = img.rows;
-
 	// initialize a variable to store the minimum distance
 	double min_dist = std::numeric_limits<double>::max();
 
 	// initialize a variable to store the index of the closest line
 	int closest_line = -1;
 
-	// loop through the strong lines
-	for (int i = 0; i < strong_lines.size(); i++)
+	// loop through the lines
+	for (int i = 0; i < std::min(size_t(n), lines.size()); i++)
 	{
 		// get the rho and theta values of the line
-		double rho = strong_lines[i][0];
-		double theta = strong_lines[i][1];
+        float rho = lines[i][0], theta = lines[i][1];
+        cv::Point pt1, pt2;
+        double a = cos(theta), b = sin(theta);
+        double x0 = a*rho, y0 = b*rho;
+        pt1.x = cvRound(x0 + 1000*(-b));
+        pt1.y = cvRound(y0 + 1000*(a));
+        pt2.x = cvRound(x0 - 1000*(-b));
+        pt2.y = cvRound(y0 - 1000*(a));
 
-		// calculate the distance from the top right corner to the line
-		// using the formula |rho - x*cos(theta) - y*sin(theta)|
-		double dist = std::abs(rho - width * std::cos(theta) - 0 * std::sin(theta));
+		// Calculate the middle point of the line
+		cv::Point mid((pt1.x + pt2.x) / 2, (pt1.y + pt2.y) / 2);
 
+		// Get the top right corner of the image
+		cv::Point tr(img.cols, 0);
+
+		// calculate distance
+		//double dist = cv::norm(mid - tr);
+		double dist = img.cols + rho;
+		
 		// check if the distance is smaller than the current minimum
 		if (dist < min_dist)
 		{
 			// update the minimum distance and the index of the closest line
 			min_dist = dist;
 			closest_line = i;
+
+			// print distance
+			std::cout << "Distance to top right corner = " << dist << std::endl;
 		}
 	}
 	// check if a closest line was found
@@ -678,8 +640,8 @@ void aia::Hough(int, void*)
 	{
 		// print the rho and theta values of the closest line
 		std::cout << "The closest line to the top right corner has angle = " <<
-		strong_lines[closest_line][1] * 180 / CV_PI <<
-		" and rho =" << strong_lines[closest_line][0] << std::endl;
+		lines[closest_line][1] * 180 / CV_PI <<
+		" and rho =" << lines[closest_line][0] << std::endl;
 	}
 	else
 	{
@@ -707,6 +669,15 @@ void aia::Hough(int, void*)
 		cv::Point pt2((rho - img_copy2.rows * sin(theta)) / cos(theta), img_copy2.rows);
 		// draw a white line
 		cv::line(img_copy2, pt1, pt2, cv::Scalar(0, 0, 255), 1);
+
+		// Calculate the middle point of the line
+		cv::Point mid((pt1.x + pt2.x) / 2, (pt1.y + pt2.y) / 2);
+
+		// Get the top right corner of the image
+		cv::Point tr(img.cols, 0);
+
+			// draw line from middle point to top right corner
+		cv::line(img_copy2, mid, tr, cv::Scalar(255), 2, cv::LINE_AA);
 	}
 	else
 	{ // ~horizontal line
@@ -717,7 +688,18 @@ void aia::Hough(int, void*)
 		cv::Point pt2(img_copy2.cols, (rho - img_copy2.cols * cos(theta)) / sin(theta));
 		// draw a white line
 		cv::line(img_copy2, pt1, pt2, cv::Scalar(0, 0, 255), 2, cv::LINE_AA);
+
+		// Calculate the middle point of the line
+		cv::Point mid((pt1.x + pt2.x) / 2, (pt1.y + pt2.y) / 2);
+
+		// Get the top right corner of the image
+		cv::Point tr(img.cols, 0);
+
+		// draw line from middle point to top right corner
+		cv::line(img_copy2, mid, tr, cv::Scalar(255), 2, cv::LINE_AA);
 	}
+
+	
 
 	cv::imshow("Chosen line", img_copy2);
 	//////////////////////////////////////////
@@ -750,6 +732,6 @@ void aia::Hough(int, void*)
 	// Display the result
 	cv::imshow("Segmented mammogram", segmented);
 
-	aia::segmented_hough = aia::img_fs;
+	aia::segmented_hough = aia::img_fs.clone();
 	cv::fillConvexPoly(aia::segmented_hough, cv::Mat( mask_pts ) / scale, cv::Scalar(0));
 }
