@@ -11,7 +11,7 @@ set (CMAKE_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX} CACHE INTERNAL "")
 include(cmake/utils.cmake)
 
 # require C++11
-set (CMAKE_CXX_STANDARD 11)
+set (CMAKE_CXX_STANDARD 17)
 
 # set up library and binary directories
 if(NOT LIBRARY_OUTPUT_PATH)

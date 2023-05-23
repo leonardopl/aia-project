@@ -1,6 +1,8 @@
 // include aia and ucas utility functions
 #include "aiaConfig.h"
 #include "ucasConfig.h"
+#include <filesystem>
+namespace fs = std::filesystem;
 
 void apply_ms(int, void*);
 void segmentation(cv::Mat &);
@@ -13,6 +15,8 @@ cv::Mat quantizeImage(cv::Mat, int);
 // since we work with a GUI, we need parameters (and the images) to be stored in global variables
 namespace aia
 {
+	float scale = 0.15f;				// scale factor for the input image
+
 	// the images we need to keep in memory
 	cv::Mat img;         			// input image
 	cv::Mat imgEdges;      	  		// binary image after edge detection
@@ -23,6 +27,9 @@ namespace aia
 	cv::Mat segmented_intensity;	// segmented image by intensity method
 	cv::Mat segmented_final;		// final segmented image
 	cv::Mat clahe;					// CLAHE image
+	cv::Mat mask_hough;
+	cv::Mat mask_intensity;
+	cv::Mat img_fs;
 
 	// parameters of edge detection
 	int stdevX10;           // standard deviation of the gaussian smoothing applied as denoising prior to the calculation of the image derivative
@@ -40,6 +47,7 @@ namespace aia
 	// parameters of intensity-based segmentation
 	int l_range = 10;
 	int u_range = 10;
+	int muscle_component_idx = 0;
 
 	// parameters of mean-shift segmentation
 	int termcrit = 20;
@@ -83,96 +91,109 @@ void set_toggle(int state, void* d) {
 //////////////////////////////////////////
 int main()
 {
-	cv::Mat img;
 
-	cv::startWindowThread();
+    std::string path = std::string(DATASET_PATH) + "/images/";
+    for (const auto & entry : fs::directory_iterator(path)) {
+   
+        std::cout << fs::path(entry).stem() << std::endl;
+		std::string filename = fs::path(entry).stem().string();
 
-	std::string filename = "22670855_0b7396cdccacca82_MG_R_ML_ANON";
-
-	img = cv::imread(
-		std::string(DATASET_PATH) + 
-		"/images/" + filename + ".tif", 
-		cv::IMREAD_GRAYSCALE);
-
-	// check if the image was loaded
-	if (img.empty())
-	{
-		std::cout << "Error: Image cannot be loaded!" << std::endl;
-		return EXIT_FAILURE;
-	}
-
-
-	// resize it to 15% of its original size
-	cv::resize(img, img, cv::Size(0,0), 0.15, 0.15);
-
-	// standardize orientation
-	bool rotated = standardize_orientation(img);
-
-	aia::imshow("Orig", img, false);
-	std::string nameb1 = "Use mean-shift";
-    std::string nameb2 = "Show k-means (needs mean-shift)";
-    cv::createButton(nameb1, set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 1);
-    cv::createButton(nameb2, set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 1);
-	cv::createButton("Use intensity seg", set_toggle, &aia::use_intensity, cv::QT_CHECKBOX, 0);
-
-
-	// set default parameters
-	aia::stdevX10 = 20;
-	aia::threshold = 10;
-	aia::alpha0 = 0;
-	aia::alpha1 = 360;
-	aia::drho = 1;
-	aia::dtheta = 1;
-	aia::accum = 11;
-	aia::n = 30;
-
-	aia::orig = img.clone();
-
-	segmentation(img);
-
-	// wait for ESC key to be pressed to exit
-	char exit_key_press = 0;
-	while (exit_key_press != 27) // or key != 'q'
-	{
-	
-		if (aia::change_ui) {
-			aia::change_ui = false;
-			segmentation(img);
+		if (filename.find("_CC_") != std::string::npos) {
+			std::cout << fs::path(entry).stem() << std::endl;
+			continue;
 		}
 
-		exit_key_press = cv::waitKey(1);
+		cv::Mat img;
 
+		cv::startWindowThread();
+
+
+
+		img = cv::imread(
+			std::string(DATASET_PATH) + 
+			"/images/" + filename + ".tif", 
+			cv::IMREAD_GRAYSCALE);
+
+		// check if the image was loaded
+		if (img.empty())
+		{
+			std::cout << "Error: Image cannot be loaded!" << std::endl;
+			return EXIT_FAILURE;
+		}
+
+		aia::img_fs = img.clone();
+
+		// resize it to 15% of its original size
+		cv::resize(img, aia::orig, cv::Size(0,0), aia::scale, aia::scale);
+
+		// standardize orientation
+		bool rotated = standardize_orientation(aia::orig);
+
+		aia::imshow("Orig", aia::orig, false);
+		std::string nameb1 = "Use mean-shift";
+		std::string nameb2 = "Show k-means (needs mean-shift)";
+		cv::createButton(nameb1, set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 1);
+		cv::createButton(nameb2, set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 1);
+		cv::createButton("Use intensity seg", set_toggle, &aia::use_intensity, cv::QT_CHECKBOX, 0);
+
+
+		// set default parameters
+		aia::stdevX10 = 20;
+		aia::threshold = 10;
+		aia::alpha0 = 0;
+		aia::alpha1 = 360;
+		aia::drho = 1;
+		aia::dtheta = 1;
+		aia::accum = 11;
+		aia::n = 30;
+
+		segmentation(aia::orig);
+
+		// wait for ESC key to be pressed to exit
+		char exit_key_press = 0;
+		while (exit_key_press != 27) // or key != 'q'
+		{
+		
+			if (aia::change_ui) {
+				aia::change_ui = false;
+				segmentation(aia::orig);
+			}
+
+			exit_key_press = cv::waitKey(1);
+
+		}
+
+		cv::destroyAllWindows();
+
+		if (aia::use_intensity) {
+			aia::segmented_final = aia::segmented_intensity;
+		}
+		else {
+			aia::segmented_final = aia::segmented_hough;
+		}
+
+		appplyCLAHE(1, 0);
+		cv::createTrackbar("clip_limit", aia::win_name_clahe, &aia::clip_limit, 40, appplyCLAHE);
+		cv::createTrackbar("tile_size", aia::win_name_clahe, &aia::tile_size, 40, appplyCLAHE);
+
+		// wait for ESC key to be pressed to exit
+		exit_key_press = 0;
+		while (exit_key_press != 27) // or key != 'q'
+		{
+			exit_key_press = cv::waitKey(10);
+		}
+
+		// flip image to original orientation
+		if (rotated) {
+			cv::flip(aia::segmented_final, aia::segmented_final, 1);
+			rotated = false;
+		}
+
+		cv::imwrite(std::string(DATASET_PATH) + "/results/preprocessing/"
+		+ filename + "_segmented" + ".tif", aia::clahe);
+
+		cv::destroyAllWindows();
 	}
-
-	cv::destroyAllWindows();
-
-	if (aia::use_intensity) {
-		aia::segmented_final = aia::segmented_intensity;
-	}
-	else {
-		aia::segmented_final = aia::segmented_hough;
-	}
-
-	cv::namedWindow(aia::win_name_clahe);
-	cv::createTrackbar("clip_limit", aia::win_name_clahe, &aia::clip_limit, 40, appplyCLAHE);
-	cv::createTrackbar("tile_size", aia::win_name_clahe, &aia::tile_size, 40, appplyCLAHE);
-	appplyCLAHE(1, 0);
-
-	// wait for ESC key to be pressed to exit
-	exit_key_press = 0;
-	while (exit_key_press != 27) // or key != 'q'
-	{
-		exit_key_press = cv::waitKey(10);
-	}
-
-	// flip image to original orientation
-	if (rotated) {
-		cv::flip(aia::segmented_final, aia::segmented_final, 1);
-		rotated = false;
-	}
-
-	cv::imwrite(std::string(DATASET_PATH) + "/results/preprocessing/"
-	+ filename + "_segmented" + ".tif", aia::segmented_final);
 
 	return EXIT_SUCCESS;
 }
@@ -273,6 +294,7 @@ void segmentation(cv::Mat &orig)
 		cv::namedWindow(aia::win_name_int_seg);
 		cv::createTrackbar("lower range", aia::win_name_int_seg, &aia::l_range, 20, intensity_based_segmentation);
 		cv::createTrackbar("upper range", aia::win_name_int_seg, &aia::u_range, 20, intensity_based_segmentation);
+		cv::createTrackbar("component id", aia::win_name_int_seg, &aia::muscle_component_idx, 5, intensity_based_segmentation);
 
 		intensity_based_segmentation(1, 0);
 	}
@@ -287,6 +309,12 @@ void segmentation(cv::Mat &orig)
 //////////////////////////////////////////
 // INTENSITY-BASED SEGMENTATION
 //////////////////////////////////////////
+// comparison function object
+bool compareContourAreas ( std::vector<cv::Point> contour1, std::vector<cv::Point> contour2 ) {
+    double i = fabs( contourArea(cv::Mat(contour1)) );
+    double j = fabs( contourArea(cv::Mat(contour2)) );
+    return ( i > j );
+}
 void intensity_based_segmentation(int, void* data) {
 	unsigned char muscle_intensity = aia::img_ms.at<unsigned char>(10, aia::img_ms.cols-10);
 	std::cout << "Muscle intensity: " << (int)muscle_intensity << std::endl;
@@ -294,36 +322,23 @@ void intensity_based_segmentation(int, void* data) {
 	cv::inRange(aia::img_ms, muscle_intensity-aia::l_range, muscle_intensity+aia::u_range, mask);
 	std::vector < std::vector <cv::Point> > components;
 	cv::findContours(mask, components, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
-	int muscle_component_idx = 0;
+
 	std::cout << "Number of components: " << components.size() << std::endl;
-	if(components.size() != 1)
-	{
-		double maxArea = 0;
-		for(int i=0; i<components.size(); i++)
-		{
-			double compArea = cv::contourArea(components[i]);
-			std::cout << "Component " << i << " area: " << compArea << std::endl;
 
-			if(compArea > maxArea)
-			{
-				maxArea = compArea;
-				muscle_component_idx = i;
-			}
+	if (aia::muscle_component_idx > components.size())
+		return;
 
-			// Get the bounding box of the muscle component
-			cv::Rect muscle_bbox = cv::boundingRect(components[i]);
-
-			// Print the top-left corner of the bounding box
-			std::cout << "Muscle component top-left corner: (" << muscle_bbox.x << ", " << muscle_bbox.y << ")" << std::endl;
-			
-		}
-	}
+	// sort contours
+	std::sort(components.begin(), components.end(), compareContourAreas);
 	
 	// overlay with original image
 	cv::Mat selection_layer = aia::orig.clone();
-	cv::drawContours(selection_layer, components, muscle_component_idx, cv::Scalar(0, 255, 255), cv::FILLED, cv::LINE_AA);
+	cv::drawContours(selection_layer, components, aia::muscle_component_idx, cv::Scalar(0, 255, 255), cv::FILLED, cv::LINE_AA);
 	aia::imshow(aia::win_name_int_seg, selection_layer, false);
-	aia::segmented_intensity = selection_layer.clone();
+
+
+	aia::segmented_intensity = aia::img_fs.clone();
+	cv::fillConvexPoly(aia::segmented_intensity, cv::Mat (components[aia::muscle_component_idx] ) / aia::scale, cv::Scalar(0, 255, 255));
 }
 
 
@@ -369,7 +384,7 @@ void appplyCLAHE(int, void*)
 		return;
 	cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(aia::clip_limit, cv::Size(aia::tile_size, aia::tile_size));
 	clahe->apply(aia::segmented_final, aia::clahe);
-	cv::imshow(aia::win_name_clahe, aia::clahe);
+	aia::imshow(aia::win_name_clahe, aia::clahe, false, 0.17f);
 }
 
 
@@ -727,13 +742,14 @@ void aia::Hough(int, void*)
 	mask_pts.push_back(cv::Point(x2, y2));
 	mask_pts.push_back(cv::Point(img.cols, 0));
 	cv::fillConvexPoly(mask, mask_pts, cv::Scalar(0));
-
+	aia::mask_hough = mask;
 	// Use the mask to segment the mammogram
 	cv::Mat segmented;
 	orig.copyTo(segmented, mask);
-
-	aia::segmented_hough = segmented;
-
+	
 	// Display the result
-	cv::imshow("Segmented mammogram", segmented_hough);
+	cv::imshow("Segmented mammogram", segmented);
+
+	aia::segmented_hough = aia::img_fs;
+	cv::fillConvexPoly(aia::segmented_hough, cv::Mat( mask_pts ) / scale, cv::Scalar(0));
 }
