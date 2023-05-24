@@ -4,7 +4,7 @@ threshold: 10
 alpha0: 0
 alpha1: 360
 drho: 1
-dtheta: 1
+dtheta: 6
 accum: 11
 n: 30
 clip_limit: 6

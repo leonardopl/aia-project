@@ -1,10 +1,10 @@
 filename: 20588510_bf1a6aaadb05e3df_MG_R_ML_ANON
-stdevX10: 37
-threshold: 5
+stdevX10: 20
+threshold: 10
 alpha0: 0
 alpha1: 360
-drho: 10
-dtheta: 9
+drho: 1
+dtheta: 6
 accum: 11
 n: 2
 clip_limit: 6

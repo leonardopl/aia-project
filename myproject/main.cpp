@@ -157,7 +157,7 @@ int main()
 		aia::drho = 1;
 		aia::dtheta = 6;
 		aia::accum = 11;
-		aia::n = 30;
+		aia::n = 1;
 
 		segmentation(aia::orig);
 
@@ -185,6 +185,12 @@ int main()
 			aia::segmented_final = aia::segmented_hough;
 		}
 
+		// flip image to original orientation
+		if (rotated) {
+			cv::flip(aia::segmented_final, aia::segmented_final, 1);
+			rotated = false;
+		}
+
 		appplyCLAHE(1, 0);
 		cv::createTrackbar("clip_limit", aia::win_name_clahe, &aia::clip_limit, 40, appplyCLAHE);
 		cv::createTrackbar("tile_size", aia::win_name_clahe, &aia::tile_size, 40, appplyCLAHE);
@@ -196,14 +202,11 @@ int main()
 			exit_key_press = cv::waitKey(10);
 		}
 
-		// flip image to original orientation
-		if (rotated) {
-			cv::flip(aia::segmented_final, aia::segmented_final, 1);
-			rotated = false;
-		}
-
-		cv::imwrite(resultsPath.string() + 
+		cv::imwrite(resultsPath.string() +
 		filename + "_preprocessed" + ".tif", aia::clahe);
+
+		cv::imwrite(resultsPath.string() + "/noclahe/" + 
+		filename + "_nopecmuscle" + ".tif", aia::segmented_final);
 
 		std::ofstream log;
 		log.open (resultsPath.string() + "/logs/" +
