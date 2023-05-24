@@ -75,6 +75,7 @@ namespace aia
 	int use_ms = 0;
 	int show_kmeans = 0;
 	int use_intensity = 0;
+	int refresh_ui = 0;
 	bool change_ui = false;
 }
 
@@ -96,7 +97,7 @@ int main()
 
     std::string path = std::string(DATASET_PATH) + "/images/";
     for (const auto & entry : fs::directory_iterator(path)) {
-   
+		
         std::cout << fs::path(entry).stem() << std::endl;
 		std::string filename = fs::path(entry).stem().string();
 
@@ -106,7 +107,7 @@ int main()
 		}
 
 		// check if file exists
-		if (fs::exists(std::string(DATASET_PATH) + "/results/preprocessing/" + filename + "_preprocessed" + ".tif")) {
+		if (fs::exists("../../results/preprocessing/" + filename + "_preprocessed" + ".tif")) {
 			std::cout << "File " << filename << " already preprocessed" << std::endl;
 			continue;
 		}
@@ -139,11 +140,10 @@ int main()
 		cv::resize(img, aia::orig, cv::Size(0,0), aia::scale, aia::scale);
 
 		aia::imshow("Orig", aia::orig, false);
-		std::string nameb1 = "Use mean-shift";
-		std::string nameb2 = "Show k-means (needs mean-shift)";
-		cv::createButton(nameb1, set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 0);
-		cv::createButton(nameb2, set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 0);
+		cv::createButton("Use mean-shift", set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 0);
+		cv::createButton("Show k-means (needs mean-shift)", set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 0);
 		cv::createButton("Use intensity seg", set_toggle, &aia::use_intensity, cv::QT_CHECKBOX, 0);
+		cv::createButton("Refresh UI", set_toggle_ui, &aia::refresh_ui, cv::QT_PUSH_BUTTON|cv::QT_NEW_BUTTONBAR, 0);
 
 
 		// set default parameters
@@ -165,6 +165,7 @@ int main()
 		
 			if (aia::change_ui) {
 				aia::change_ui = false;
+				aia::refresh_ui = 0;
 				segmentation(aia::orig);
 			}
 
@@ -198,11 +199,11 @@ int main()
 			rotated = false;
 		}
 
-		cv::imwrite(std::string(DATASET_PATH) + "/results/preprocessing/"
+		cv::imwrite("../results/preprocessing/"
 		+ filename + "_preprocessed" + ".tif", aia::clahe);
 
 		std::ofstream log;
-		log.open (std::string(DATASET_PATH) + "/results/preprocessing/logs/"
+		log.open ("../results/preprocessing/logs/"
 		+ filename + "_log" + ".txt");
 		log <<
 		"filename: " << filename << std::endl <<
@@ -558,7 +559,7 @@ void aia::Hough(int, void*)
 		float rho = line[0];
 		float theta = line[1];
 		double angle = theta * 180 / CV_PI;
-		if (angle < 100 || angle > 170)
+		if (angle < 120 || angle > 175)
 			continue;
 
 		filtered_lines.push_back(line);

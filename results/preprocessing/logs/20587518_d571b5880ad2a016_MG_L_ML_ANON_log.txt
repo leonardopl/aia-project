@@ -1,0 +1,16 @@
+filename: 20587518_d571b5880ad2a016_MG_L_ML_ANON
+stdevX10: 20
+threshold: 10
+alpha0: 0
+alpha1: 360
+drho: 90
+dtheta: 79
+accum: 11
+n: 29
+clip_limit: 6
+tile_size: 10
+scale: 0.15
+rotated: 0
+use_ms: 0
+show_kmeans: 1
+use_intensity: 0
