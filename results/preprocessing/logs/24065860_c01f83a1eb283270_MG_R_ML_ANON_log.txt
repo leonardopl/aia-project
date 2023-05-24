@@ -1,0 +1,16 @@
+filename: 24065860_c01f83a1eb283270_MG_R_ML_ANON
+stdevX10: 20
+threshold: 10
+alpha0: 0
+alpha1: 360
+drho: 19
+dtheta: 80
+accum: 11
+n: 7
+clip_limit: 6
+tile_size: 10
+scale: 0.15
+rotated: 0
+use_ms: 0
+show_kmeans: 0
+use_intensity: 0
