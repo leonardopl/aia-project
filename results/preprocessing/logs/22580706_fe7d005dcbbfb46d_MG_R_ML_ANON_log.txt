@@ -1,0 +1,16 @@
+filename: 22580706_fe7d005dcbbfb46d_MG_R_ML_ANON
+stdevX10: 33
+threshold: 9
+alpha0: 6
+alpha1: 296
+drho: 37
+dtheta: 44
+accum: 11
+n: 4
+clip_limit: 6
+tile_size: 10
+scale: 0.15
+rotated: 0
+use_ms: 0
+show_kmeans: 0
+use_intensity: 0

@@ -1,0 +1,16 @@
+filename: 22614150_6bd24a0a42c19ce1_MG_L_ML_ANON
+stdevX10: 20
+threshold: 10
+alpha0: 0
+alpha1: 360
+drho: 6
+dtheta: 68
+accum: 18
+n: 14
+clip_limit: 6
+tile_size: 10
+scale: 0.15
+rotated: 0
+use_ms: 0
+show_kmeans: 0
+use_intensity: 0
