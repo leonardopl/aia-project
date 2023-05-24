@@ -97,7 +97,10 @@ int main()
 
     std::string path = std::string(DATASET_PATH) + "/images/";
     for (const auto & entry : fs::directory_iterator(path)) {
-		
+
+		fs::path resultsPath = fs::current_path() / "../../results/preprocessing/";
+		std::cout << resultsPath.string() << std::endl;
+
         std::cout << fs::path(entry).stem() << std::endl;
 		std::string filename = fs::path(entry).stem().string();
 
@@ -199,12 +202,12 @@ int main()
 			rotated = false;
 		}
 
-		cv::imwrite("../results/preprocessing/"
-		+ filename + "_preprocessed" + ".tif", aia::clahe);
+		cv::imwrite(resultsPath.string() + 
+		filename + "_preprocessed" + ".tif", aia::clahe);
 
 		std::ofstream log;
-		log.open ("../results/preprocessing/logs/"
-		+ filename + "_log" + ".txt");
+		log.open (resultsPath.string() + "/logs/" +
+		filename + "_log" + ".txt");
 		log <<
 		"filename: " << filename << std::endl <<
 		"stdevX10: " << aia::stdevX10 << std::endl <<
