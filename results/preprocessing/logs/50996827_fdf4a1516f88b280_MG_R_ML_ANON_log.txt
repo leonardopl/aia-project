@@ -1,0 +1,16 @@
+filename: 50996827_fdf4a1516f88b280_MG_R_ML_ANON
+stdevX10: 20
+threshold: 10
+alpha0: 0
+alpha1: 360
+drho: 34
+dtheta: 28
+accum: 11
+n: 7
+clip_limit: 6
+tile_size: 10
+scale: 0.15
+rotated: 0
+use_ms: 0
+show_kmeans: 0
+use_intensity: 0

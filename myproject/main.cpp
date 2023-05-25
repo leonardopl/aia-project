@@ -77,6 +77,7 @@ namespace aia
 	int use_intensity = 0;
 	int refresh_ui = 0;
 	bool change_ui = false;
+	int use_nline = 0;
 }
 
 void set_toggle_ui(int state, void* d) {
@@ -143,10 +144,11 @@ int main()
 		cv::resize(img, aia::orig, cv::Size(0,0), aia::scale, aia::scale);
 
 		aia::imshow("Orig", aia::orig, false);
-		cv::createButton("Use mean-shift", set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, 0);
-		cv::createButton("Show k-means (needs mean-shift)", set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, 0);
-		cv::createButton("Use intensity seg", set_toggle, &aia::use_intensity, cv::QT_CHECKBOX, 0);
+		cv::createButton("Use mean-shift", set_toggle_ui, &aia::use_ms, cv::QT_CHECKBOX, aia::use_ms ? 1 : 0);
+		cv::createButton("Show k-means (needs mean-shift)", set_toggle_ui, &aia::show_kmeans, cv::QT_CHECKBOX, aia::show_kmeans ? 1 : 0);
+		cv::createButton("Use intensity seg", set_toggle, &aia::use_intensity, cv::QT_CHECKBOX, aia::use_intensity ? 1 : 0);
 		cv::createButton("Refresh UI", set_toggle_ui, &aia::refresh_ui, cv::QT_PUSH_BUTTON|cv::QT_NEW_BUTTONBAR, 0);
+		cv::createButton("Use n line", set_toggle, &aia::use_nline, cv::QT_CHECKBOX, aia::use_nline ? 1 : 0);
 
 
 		// set default parameters
@@ -157,7 +159,7 @@ int main()
 		aia::drho = 1;
 		aia::dtheta = 6;
 		aia::accum = 11;
-		aia::n = 1;
+		aia::n = 10;
 
 		segmentation(aia::orig);
 
@@ -657,6 +659,9 @@ void aia::Hough(int, void*)
 	}
 	//////////////////////////////////////////
 
+	if (aia::use_nline) {
+		closest_line = n - 1;
+	}
 
 	//////////////////////////////////////////
 	// DRAW SELECTED LINE
