@@ -105,7 +105,7 @@ int main()
         std::cout << fs::path(entry).stem() << std::endl;
 		std::string filename = fs::path(entry).stem().string();
 
-		if (filename.find("_CC_") != std::string::npos) {
+		if (filename.find("_ML_") == std::string::npos) {
 			std::cout << fs::path(entry).stem() << std::endl;
 			continue;
 		}
